@@ -1,0 +1,108 @@
+#!/usr/bin/python
+
+import os
+import pycurl
+from shutil import rmtree
+import argparse
+import logging
+from sh import rsync
+import time
+from datetime import date
+
+#Parse arguments
+parser = argparse.ArgumentParser(
+    description=__doc__)
+
+parser.add_argument("BACKUPDIR", help="Specify the directory to backup.")
+parser.add_argument("DESTINATIONDIR", help="Specify the directory where the backup is stored.")
+parser.add_argument("-l", "--logfile", help="Specify the logfile to monitor.")
+parser.add_argument("-q", "--quiet", help="Do not print to stdout.", action="store_true")
+
+args = parser.parse_args()
+
+#Logging
+logfile = args.logfile
+rootLogger = logging.getLogger()
+logFormatter = logging.Formatter("%(asctime)s - %(message)s")
+rootLogger.setLevel(logging.INFO)
+
+if logfile:
+    fileHandler = logging.FileHandler(logfile)
+    fileHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(fileHandler)
+
+if not args.quiet:
+    consoleHandler = logging.StreamHandler()
+    consoleHandler.setFormatter(logFormatter)
+    rootLogger.addHandler(consoleHandler)
+
+# Define day of week
+today = date.today()
+ic = today.isocalendar()
+day_of_week = ic[2]
+
+#logging.info("Today: " + today)
+logging.info("Day of Week: " + str(day_of_week))
+
+# Define variables
+backupdir = args.BACKUPDIR
+destinationdir = args.DESTINATIONDIR + '/' + str(day_of_week) + '/'
+logfile = args.logfile
+
+logging.info("Destination Directory: " +  destinationdir)
+logging.info("Backup Directory" + backupdir)
+
+username = 'xxx'
+password = 'xxx'
+
+logging.info("Starting CM backup.")
+logging.info("Starting host backup.")
+with open(destinationdir + 'cm-hosts.json', 'wb') as f:
+    c = pycurl.Curl()
+    c.setopt(pycurl.USERPWD, '%s:%s' % (username, password))
+    c.setopt(c.URL, 'http://xxx.xx.xxx.xx:7180/api/v10/hosts/')
+    c.setopt(c.PROXY,'xxx.xx.xxx.xx')
+    c.setopt(c.PROXYPORT,3128)
+    c.setopt(c.WRITEDATA, f)
+    c.perform()
+    c.close()
+
+logging.info("Starting deployment backup.")
+with open(destinationdir + 'cm-deployment.json', 'wb') as f:
+    c = pycurl.Curl()
+    c.setopt(pycurl.USERPWD, '%s:%s' % (username, password))
+    c.setopt(c.URL, 'http://xxx.xx.xxx.xx:7180/api/v10/cm/deployment/')
+    c.setopt(c.PROXY,'xxx.xx.xxx.xx')
+    c.setopt(c.PROXYPORT,3128)
+    c.setopt(c.WRITEDATA, f)
+    c.perform()
+    c.close()
+
+logging.info("Starting services backup.")
+with open(destinationdir + 'cm-services.json', 'wb') as f:
+    c = pycurl.Curl()
+    c.setopt(pycurl.USERPWD, '%s:%s' % (username, password))
+    c.setopt(c.URL, 'http://xxx.xx.xxx.xx:7180/api/v1/clusters/Eden%20Cluster/services/')
+    c.setopt(c.PROXY,'xxx.xx.xxx.xx')
+    c.setopt(c.PROXYPORT,3128)
+    c.setopt(c.WRITEDATA, f)
+    c.perform()
+    c.close()
+
+logging.info("Starting rsync backup.")
+
+# exclude file types
+file_types = ["*.csv","*.dat","*.bin","*.zip","*.pdf","*.dll","*.rpm","*.jar","*.tgz","*.doc","*.docx","*.gz"]
+exclusions = []
+
+for argument in file_types:
+    exclusions.append("--exclude="+argument)
+
+# execute rsync
+# On Monday, backup all files
+if day_of_week == 1:
+    rsync("-rav", backupdir, destinationdir)
+else:
+    rsync("-rav", exclusions,  backupdir, destinationdir)
+
+logging.info("done.")
